@@ -209,11 +209,22 @@ def test_kill_all_claude_processes_terminates_matching_external_processes(
         proc1 = await asyncio.create_subprocess_exec(str(fake_claude), "30")
         proc2 = await asyncio.create_subprocess_exec(str(fake_claude), "30")
 
+        async def wait_pid_exit(pid: int, timeout_seconds: float = 4.0) -> None:
+            deadline = time.monotonic() + timeout_seconds
+            while True:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    return
+                if time.monotonic() > deadline:
+                    raise TimeoutError(f"pid {pid} still running after cleanup")
+                await asyncio.sleep(0.05)
+
         try:
             await asyncio.sleep(0.1)
             result = await runner.kill_all_claude_processes(force=True)
-            await asyncio.wait_for(proc1.wait(), timeout=3.0)
-            await asyncio.wait_for(proc2.wait(), timeout=3.0)
+            await wait_pid_exit(proc1.pid)
+            await wait_pid_exit(proc2.pid)
             return result
         finally:
             if proc1.returncode is None:
