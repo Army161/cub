@@ -94,6 +94,7 @@ Notes:
 |---|---|
 | `/run <task>` | Queue a delegated Claude task |
 | `/probe [id] [question]` | Probe/resume a task session |
+| `/continue [id] <instruction>` | Continue a task using the same Claude session |
 | `/list` | Show ongoing tasks |
 | `/status [id]` | Show task status |
 | `/tasks` | Show recent tasks |
@@ -104,7 +105,8 @@ Notes:
 | `/remind <task_id> <when> [note]` | Set reminder |
 
 Natural language controls also work:
-`cancel task`, `kill task ab12cd34`, `mute updates`, `check task ab12cd34`.
+`cancel task`, `kill task ab12cd34`, `mute updates`, `check task ab12cd34`,
+`continue task ab12cd34 add e2e tests`.
 
 ## Run Multiple Bots on One Machine
 
@@ -147,6 +149,8 @@ uv run cub-killall --graceful
 - `TELEGRAM_MAX_CONCURRENT_UPDATES`: parallel inbound update handling (default `8`)
 - `CLAUDE_ARGS`: defaults to `--dangerously-skip-permissions --verbose --output-format stream-json`
 - `WORKSPACE_DIR`: where delegated tasks run (defaults to `$CUB_HOME/work`)
+- `FRONT_ASSISTANT_TOOL_MODE`: `read_only` (default for `claude_cli`) or `none`
+- `FRONT_ASSISTANT_MAX_TURNS`: bounds fast assistant turns (default `2` in read-only mode)
 
 ## Project Layout
 

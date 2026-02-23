@@ -160,12 +160,16 @@ def test_build_claude_cli_command_with_persistent_session() -> None:
         resume_session_id=None,
         session_id="f26d5328-31ca-418e-96e0-6ff66a6d7491",
         persist_session=True,
+        tool_mode="none",
+        max_turns=1,
     )
     assert cmd[0] == "claude"
     assert "--session-id" in cmd
     assert "f26d5328-31ca-418e-96e0-6ff66a6d7491" in cmd
     assert "--tools" in cmd
     assert "" in cmd
+    assert "--max-turns" in cmd
+    assert "1" in cmd
     assert "--no-session-persistence" not in cmd
 
 
@@ -181,6 +185,8 @@ def test_build_claude_cli_command_without_persistence() -> None:
         resume_session_id=None,
         session_id=None,
         persist_session=False,
+        tool_mode="none",
+        max_turns=1,
     )
     assert "--no-session-persistence" in cmd
     assert "--session-id" not in cmd
@@ -199,6 +205,8 @@ def test_build_claude_cli_command_with_resume_and_json_schema() -> None:
         resume_session_id="f26d5328-31ca-418e-96e0-6ff66a6d7491",
         session_id=None,
         persist_session=True,
+        tool_mode="none",
+        max_turns=1,
     )
     assert "--resume" in cmd
     assert "f26d5328-31ca-418e-96e0-6ff66a6d7491" in cmd
@@ -206,6 +214,50 @@ def test_build_claude_cli_command_with_resume_and_json_schema() -> None:
     assert "--output-format" in cmd
     assert "json" in cmd
     assert "--json-schema" in cmd
+
+
+def test_build_claude_cli_command_read_only_mode_enables_read_tool() -> None:
+    cmd = _build_claude_cli_command(
+        claude_command="claude",
+        claude_args=("--dangerously-skip-permissions",),
+        model="haiku",
+        system_prompt="router prompt",
+        user_prompt="summarize latest task output",
+        output_format="text",
+        json_schema=None,
+        resume_session_id=None,
+        session_id=None,
+        persist_session=False,
+        tool_mode="read_only",
+        max_turns=2,
+    )
+
+    assert "--allowed-tools" in cmd
+    assert "Read" in cmd
+    assert "--tools" not in cmd
+    assert "--max-turns" in cmd
+    assert "2" in cmd
+
+
+def test_build_claude_cli_command_respects_explicit_tool_flags_from_args() -> None:
+    cmd = _build_claude_cli_command(
+        claude_command="claude",
+        claude_args=("--allowed-tools", "Read,Grep", "--max-turns", "3"),
+        model="haiku",
+        system_prompt="router prompt",
+        user_prompt="summarize latest task output",
+        output_format="text",
+        json_schema=None,
+        resume_session_id=None,
+        session_id=None,
+        persist_session=False,
+        tool_mode="none",
+        max_turns=1,
+    )
+
+    assert cmd.count("--allowed-tools") == 1
+    assert "--tools" not in cmd
+    assert cmd.count("--max-turns") == 1
 
 
 def test_coerce_claude_cli_output_uses_structured_output_field() -> None:

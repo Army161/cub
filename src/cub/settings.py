@@ -76,6 +76,8 @@ class Settings:
     front_assistant_model: str
     front_assistant_timeout_seconds: float
     front_assistant_context_messages: int
+    front_assistant_tool_mode: str
+    front_assistant_max_turns: int
     front_claude_command: str
     front_claude_args: tuple[str, ...]
     anthropic_api_key: str
@@ -160,6 +162,19 @@ class Settings:
         front_context_messages = int(os.getenv("FRONT_ASSISTANT_CONTEXT_MESSAGES", "80"))
         if front_context_messages < 10:
             raise ValueError("FRONT_ASSISTANT_CONTEXT_MESSAGES must be >= 10")
+
+        tool_mode_default = "read_only" if provider == "claude_cli" else "none"
+        front_tool_mode = (
+            os.getenv("FRONT_ASSISTANT_TOOL_MODE", tool_mode_default).strip().lower() or tool_mode_default
+        )
+        if front_tool_mode not in {"none", "read_only"}:
+            raise ValueError("FRONT_ASSISTANT_TOOL_MODE must be either 'none' or 'read_only'")
+
+        max_turns_default = "2" if front_tool_mode == "read_only" else "1"
+        front_max_turns = int(os.getenv("FRONT_ASSISTANT_MAX_TURNS", max_turns_default))
+        if front_max_turns < 1:
+            raise ValueError("FRONT_ASSISTANT_MAX_TURNS must be >= 1")
+
         front_claude_command = os.getenv("FRONT_CLAUDE_COMMAND", claude_command).strip() or claude_command
         front_claude_args = _split_shell_args(
             os.getenv("FRONT_CLAUDE_ARGS", "--dangerously-skip-permissions")
@@ -215,6 +230,8 @@ class Settings:
             front_assistant_model=front_model,
             front_assistant_timeout_seconds=front_timeout,
             front_assistant_context_messages=front_context_messages,
+            front_assistant_tool_mode=front_tool_mode,
+            front_assistant_max_turns=front_max_turns,
             front_claude_command=front_claude_command,
             front_claude_args=front_claude_args,
             anthropic_api_key=anthropic_key,

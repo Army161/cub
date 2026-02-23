@@ -27,7 +27,8 @@ _CANCEL_WITH_TASK_RE = re.compile(
     re.IGNORECASE,
 )
 _PROBE_RE = re.compile(
-    r"^(?:please\s+)?(?:probe|check(?:\s+on)?|follow\s*up(?:\s+on)?|continue|resume)\s+"
+    r"^(?:please\s+)?(?:can\s+you\s+)?"
+    r"(?P<verb>probe|check(?:\s+on)?|follow\s*up(?:\s+on)?|continue|resume)\s+"
     r"(?:(?:the\s+)?task(?:\s+id)?\s*)?(?P<id>[0-9a-f]{8})?"
     r"(?:\s*[:,-]?\s*(?P<query>.+))?\s*$",
     re.IGNORECASE,
@@ -38,7 +39,7 @@ _PROBE_RE = re.compile(
 class TextIntent:
     """Detected control intent from plain-text message."""
 
-    action: Literal["cancel_task", "mute_updates", "unmute_updates", "probe_task"]
+    action: Literal["cancel_task", "mute_updates", "unmute_updates", "probe_task", "continue_task"]
     task_id: str | None = None
     force: bool = False
     query: str | None = None
@@ -77,9 +78,11 @@ def parse_control_intent(text: str) -> TextIntent | None:
 
     probe = _PROBE_RE.match(raw)
     if probe:
+        verb = (probe.group("verb") or "").strip().lower()
         task_id = _normalize_task_id(probe.group("id"))
         query = _normalize_query(probe.group("query"))
-        return TextIntent(action="probe_task", task_id=task_id, query=query)
+        action = "continue_task" if verb in {"continue", "resume"} else "probe_task"
+        return TextIntent(action=action, task_id=task_id, query=query)
 
     return None
 

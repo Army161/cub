@@ -46,5 +46,21 @@ def test_probe_intent_without_task_uses_latest() -> None:
     assert intent.task_id is None
 
 
+def test_continue_intent_with_task_and_query() -> None:
+    intent = parse_control_intent("continue task ab12cd34 add e2e tests")
+    assert intent is not None
+    assert intent.action == "continue_task"
+    assert intent.task_id == "ab12cd34"
+    assert intent.query == "add e2e tests"
+
+
+def test_continue_intent_with_can_you_prefix() -> None:
+    intent = parse_control_intent("can you continue task deadbeef add auth and tests")
+    assert intent is not None
+    assert intent.action == "continue_task"
+    assert intent.task_id == "deadbeef"
+    assert intent.query == "add auth and tests"
+
+
 def test_unrelated_text_has_no_control_intent() -> None:
     assert parse_control_intent("What is 7 + 5?") is None

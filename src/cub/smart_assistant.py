@@ -63,6 +63,19 @@ If tools are needed, output only NEEDS_TOOLS format and nothing else.
 For conversational, math, reasoning, and general questions, answer directly and concisely.
 """
 
+_FAST_CLAUDE_CLI_READ_ONLY_SYSTEM_PROMPT = """You are a fast Telegram assistant.
+You may use read-only inspection tools for quick lookups, but never write or edit files.
+
+If the request requires shell commands, file writes/edits, test/build execution, or substantial implementation work,
+respond exactly as:
+
+NEEDS_TOOLS
+<one-line summary of what should be done>
+
+Keep responses concise. Prefer at most one short read operation before answering.
+If work exceeds quick read-only lookup, output NEEDS_TOOLS format and nothing else.
+"""
+
 _TOOL_REFUSAL_PATTERNS = (
     re.compile(r"don't have.{0,30}tool", re.I),
     re.compile(r"don't have.{0,30}access", re.I),
@@ -189,11 +202,16 @@ class SmartAssistant:
     ) -> AssistantDecision:
         timeout = max(self.settings.front_assistant_timeout_seconds, 8.0)
         user_prompt = _build_fast_claude_cli_user_prompt(recent_chat, recent_tasks, user_text)
+        system_prompt = (
+            _FAST_CLAUDE_CLI_READ_ONLY_SYSTEM_PROMPT
+            if self.settings.front_assistant_tool_mode == "read_only"
+            else _FAST_CLAUDE_CLI_SYSTEM_PROMPT
+        )
         try:
             raw = await asyncio.wait_for(
                 self._complete(
                     user_prompt,
-                    system_prompt=_FAST_CLAUDE_CLI_SYSTEM_PROMPT,
+                    system_prompt=system_prompt,
                     max_tokens=300,
                     temperature=0.2,
                     chat_id=chat_id,
@@ -494,6 +512,8 @@ class SmartAssistant:
             resume_session_id=resume_session_id,
             session_id=session_id,
             persist_session=persist_session,
+            tool_mode=self.settings.front_assistant_tool_mode,
+            max_turns=self.settings.front_assistant_max_turns,
         )
 
         process = await asyncio.create_subprocess_exec(
@@ -842,6 +862,8 @@ def _build_claude_cli_command(
     resume_session_id: str | None,
     session_id: str | None,
     persist_session: bool,
+    tool_mode: Literal["none", "read_only"],
+    max_turns: int,
 ) -> list[str]:
     cmd = [claude_command, *claude_args, "--print", "--output-format", output_format]
 
@@ -850,8 +872,19 @@ def _build_claude_cli_command(
 
     cmd.extend(["--system-prompt", system_prompt])
 
-    # Front assistant mode must stay tool-free for fast, safe decisions.
-    cmd.extend(["--tools", ""])
+    if not _has_cli_flag(claude_args, "--max-turns"):
+        cmd.extend(["--max-turns", str(max_turns)])
+
+    # Front assistant defaults to tool-free mode.
+    # In read-only mode we allow only Read for quick lookups.
+    if tool_mode == "none":
+        if not _has_cli_flag(claude_args, "--tools") and not _has_cli_flag(claude_args, "--allowed-tools"):
+            cmd.extend(["--tools", ""])
+    elif tool_mode == "read_only":
+        if not _has_cli_flag(claude_args, "--allowed-tools") and not _has_cli_flag(claude_args, "--tools"):
+            cmd.extend(["--allowed-tools", "Read"])
+    else:
+        raise ValueError(f"unsupported front assistant tool mode: {tool_mode}")
 
     if output_format == "json" and json_schema is not None:
         cmd.extend(["--json-schema", json.dumps(json_schema, separators=(",", ":"))])
@@ -895,3 +928,13 @@ def _maybe_text(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _has_cli_flag(args: tuple[str, ...], flag: str) -> bool:
+    token = flag.strip()
+    if not token:
+        return False
+    for arg in args:
+        if arg == token or arg.startswith(f"{token}="):
+            return True
+    return False

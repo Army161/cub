@@ -26,6 +26,8 @@ def _clear_env(monkeypatch) -> None:
         "FRONT_ASSISTANT_MODEL",
         "FRONT_ASSISTANT_TIMEOUT_SECONDS",
         "FRONT_ASSISTANT_CONTEXT_MESSAGES",
+        "FRONT_ASSISTANT_TOOL_MODE",
+        "FRONT_ASSISTANT_MAX_TURNS",
         "FRONT_CLAUDE_COMMAND",
         "FRONT_CLAUDE_ARGS",
         "ANTHROPIC_API_KEY",
@@ -61,6 +63,31 @@ def test_settings_default_dirs_from_cub_home(monkeypatch, tmp_path: Path) -> Non
     assert settings.work_root == (tmp_path / "cub-home" / "work").resolve()
     assert settings.db_path == (tmp_path / "cub-home" / "state" / "assistant.db").resolve()
     assert settings.workspace_dir == (tmp_path / "cub-home" / "work").resolve()
+
+
+def test_settings_front_assistant_tool_mode_defaults_for_claude_cli(monkeypatch, tmp_path: Path) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("CUB_HOME", str(tmp_path / "cub-home"))
+    monkeypatch.setenv("FRONT_ASSISTANT_PROVIDER", "claude_cli")
+
+    settings = Settings.from_env()
+
+    assert settings.front_assistant_tool_mode == "read_only"
+    assert settings.front_assistant_max_turns == 2
+
+
+def test_settings_front_assistant_tool_mode_defaults_for_non_claude(monkeypatch, tmp_path: Path) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("CUB_HOME", str(tmp_path / "cub-home"))
+    monkeypatch.setenv("FRONT_ASSISTANT_PROVIDER", "openrouter")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+
+    settings = Settings.from_env()
+
+    assert settings.front_assistant_tool_mode == "none"
+    assert settings.front_assistant_max_turns == 1
 
 
 def test_settings_legacy_db_and_workspace_override(monkeypatch, tmp_path: Path) -> None:
@@ -153,6 +180,28 @@ def test_settings_shell_args_support_quotes(monkeypatch, tmp_path: Path) -> None
         "--allowed-tools",
         "Bash(git:*) Edit",
     )
+
+
+def test_settings_invalid_front_assistant_tool_mode_raises(monkeypatch, tmp_path: Path) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("CUB_HOME", str(tmp_path / "cub-home"))
+    monkeypatch.setenv("FRONT_ASSISTANT_PROVIDER", "claude_cli")
+    monkeypatch.setenv("FRONT_ASSISTANT_TOOL_MODE", "all_tools")
+
+    with pytest.raises(ValueError, match="FRONT_ASSISTANT_TOOL_MODE"):
+        Settings.from_env()
+
+
+def test_settings_invalid_front_assistant_max_turns_raises(monkeypatch, tmp_path: Path) -> None:
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
+    monkeypatch.setenv("CUB_HOME", str(tmp_path / "cub-home"))
+    monkeypatch.setenv("FRONT_ASSISTANT_PROVIDER", "claude_cli")
+    monkeypatch.setenv("FRONT_ASSISTANT_MAX_TURNS", "0")
+
+    with pytest.raises(ValueError, match="FRONT_ASSISTANT_MAX_TURNS must be >= 1"):
+        Settings.from_env()
 
 
 def test_settings_invalid_shell_args_raise(monkeypatch, tmp_path: Path) -> None:

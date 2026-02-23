@@ -110,6 +110,7 @@ class TelegramAssistantBot:
             [
                 BotCommand("run", "Run a delegated Claude task"),
                 BotCommand("probe", "Resume/probe an existing task session"),
+                BotCommand("continue", "Continue an existing task session"),
                 BotCommand("status", "Show task status"),
                 BotCommand("list", "List ongoing tasks"),
                 BotCommand("tasks", "List recent tasks"),
@@ -138,6 +139,7 @@ class TelegramAssistantBot:
         self.app.add_handler(CommandHandler("help", self.cmd_help))
         self.app.add_handler(CommandHandler("run", self.cmd_run))
         self.app.add_handler(CommandHandler("probe", self.cmd_probe))
+        self.app.add_handler(CommandHandler("continue", self.cmd_continue))
         self.app.add_handler(CommandHandler("status", self.cmd_status))
         self.app.add_handler(CommandHandler("list", self.cmd_list))
         self.app.add_handler(CommandHandler("tasks", self.cmd_tasks))
@@ -179,6 +181,7 @@ class TelegramAssistantBot:
             "Commands:\n"
             "/run <task> - run task via Claude CLI\n"
             "/probe [task_id] [question] - resume/probe Claude session for a task\n"
+            "/continue [task_id] <instruction> - continue task session with new instruction\n"
             "/status [task_id] - show status for task or latest task\n"
             "/list - list ongoing tasks\n"
             "/tasks - list recent tasks\n"
@@ -193,7 +196,7 @@ class TelegramAssistantBot:
             "\n"
             "Tips:\n"
             "- Sending plain text is equivalent to /run <text>\n"
-            "- Natural language controls work too: 'cancel task', 'kill task ab12cd34', 'mute updates', 'check task ab12cd34'.\n"
+            "- Natural language controls work too: 'cancel task', 'kill task ab12cd34', 'mute updates', 'check task ab12cd34', 'continue task ab12cd34 add e2e tests'.\n"
             "- Use /killall if Claude processes are stuck and you need machine cleanup."
         )
 
@@ -240,7 +243,46 @@ class TelegramAssistantBot:
             return
 
         query = " ".join(args).strip() or None
-        await self._queue_probe_task(update, task, query=query)
+        await self._queue_probe_task(update, task, query=query, label_prefix="probe")
+
+    async def cmd_continue(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._authorize(update):
+            return
+
+        message = update.effective_message
+        chat = update.effective_chat
+        if not message or not chat:
+            return
+
+        args = [arg.strip() for arg in context.args if arg.strip()]
+        task_id: str | None = None
+        if args and TASK_ID_RE.match(args[0]):
+            task_id = args.pop(0).lower()
+
+        instruction = " ".join(args).strip()
+        if not instruction:
+            await self._send_reply(
+                message,
+                chat.id,
+                "Usage: /continue [task_id] <instruction>\n"
+                "Example: /continue 3ffc93bf add Playwright e2e tests",
+            )
+            return
+
+        task = self._lookup_task(chat.id, task_id)
+        if not task:
+            if task_id:
+                await self._send_reply(message, chat.id, "Task not found in this chat")
+            else:
+                await self._send_reply(message, chat.id, "No task found to continue in this chat")
+            return
+
+        await self._queue_probe_task(
+            update,
+            task,
+            query=instruction,
+            label_prefix="continue",
+        )
 
     async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._authorize(update):
@@ -628,7 +670,28 @@ class TelegramAssistantBot:
                     await self._send_reply(message, chat.id, "No task found to probe in this chat")
                 return True
 
-            await self._queue_probe_task(update, task, query=intent.query)
+            await self._queue_probe_task(update, task, query=intent.query, label_prefix="probe")
+            return True
+
+        if intent.action == "continue_task":
+            task = self._lookup_task(chat.id, intent.task_id)
+            if not task:
+                if intent.task_id:
+                    await self._send_reply(message, chat.id, "Task not found in this chat")
+                else:
+                    await self._send_reply(message, chat.id, "No task found to continue in this chat")
+                return True
+
+            if not intent.query:
+                await self._send_reply(
+                    message,
+                    chat.id,
+                    "Add an instruction after continue, e.g.:\n"
+                    "continue task 3ffc93bf add e2e tests",
+                )
+                return True
+
+            await self._queue_probe_task(update, task, query=intent.query, label_prefix="continue")
             return True
 
         if intent.action != "cancel_task":
@@ -650,7 +713,14 @@ class TelegramAssistantBot:
         await self._send_reply(message, chat.id, result)
         return True
 
-    async def _queue_probe_task(self, update: Update, task: dict, *, query: str | None) -> None:
+    async def _queue_probe_task(
+        self,
+        update: Update,
+        task: dict,
+        *,
+        query: str | None,
+        label_prefix: str,
+    ) -> None:
         message = update.effective_message
         chat = update.effective_chat
         if not message or not chat:
@@ -669,7 +739,7 @@ class TelegramAssistantBot:
         await self._submit_task(
             update,
             prompt,
-            label_override=f"probe {task['id']}",
+            label_override=f"{label_prefix} {task['id']}",
             resume_session_id=session_id,
         )
 
