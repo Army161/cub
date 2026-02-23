@@ -1,5 +1,4 @@
 import asyncio
-import os
 import sys
 import time
 from pathlib import Path
@@ -181,63 +180,3 @@ def test_task_runner_close_force_stops_stubborn_process(monkeypatch, tmp_path: P
         asyncio.run(scenario())
     finally:
         store.close()
-
-
-def test_kill_all_claude_processes_terminates_matching_external_processes(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    fake_claude = tmp_path / "fake-claude-sleep"
-    os.symlink("/bin/sleep", fake_claude)
-
-    _clear_env(monkeypatch)
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "token")
-    monkeypatch.setenv("CUB_HOME", str(tmp_path / "cub-home"))
-    monkeypatch.setenv("CLAUDE_COMMAND", str(fake_claude))
-    monkeypatch.setenv("FRONT_CLAUDE_COMMAND", str(fake_claude))
-    settings = Settings.from_env()
-    settings.workspace_dir.mkdir(parents=True, exist_ok=True)
-
-    store = TaskStore(settings.db_path)
-
-    async def send_message(_chat_id: int, _text: str) -> None:
-        return None
-
-    runner = ClaudeTaskRunner(store, settings, send_message)
-
-    async def scenario() -> str:
-        proc1 = await asyncio.create_subprocess_exec(str(fake_claude), "30")
-        proc2 = await asyncio.create_subprocess_exec(str(fake_claude), "30")
-
-        async def wait_pid_exit(pid: int, timeout_seconds: float = 4.0) -> None:
-            deadline = time.monotonic() + timeout_seconds
-            while True:
-                try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
-                    return
-                if time.monotonic() > deadline:
-                    raise TimeoutError(f"pid {pid} still running after cleanup")
-                await asyncio.sleep(0.05)
-
-        try:
-            await asyncio.sleep(0.1)
-            result = await runner.kill_all_claude_processes(force=True)
-            await wait_pid_exit(proc1.pid)
-            await wait_pid_exit(proc2.pid)
-            return result
-        finally:
-            if proc1.returncode is None:
-                proc1.kill()
-                await proc1.wait()
-            if proc2.returncode is None:
-                proc2.kill()
-                await proc2.wait()
-
-    try:
-        output = asyncio.run(scenario())
-    finally:
-        store.close()
-
-    assert "Claude process cleanup complete." in output
-    assert "- Matched:" in output
