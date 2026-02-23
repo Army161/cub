@@ -51,17 +51,25 @@ Then open Telegram and send:
 ## Example Conversation
 
 ```text
-You: what is 8+7?
-Cub: 15
+You: what is 7+7?
+Cub: 14
 
-You: create a todo app in workspace/todo using react+vite
-Cub: Queued task a1b2c3d4 (...). I will post progress updates and final result here.
-Cub: Task a1b2c3d4 in progress:
-- Creating project scaffold
-- Installing dependencies
+You: add 5 to it
+Cub: 19
+
+You: create a chat app like WhatsApp with seed data (full-stack)
+Cub: Queued task b709652a (...). I will post progress updates and final result here.
+Cub: Task b709652a in progress:
+- Planning project structure
+- Creating backend + frontend scaffolding
+
+You: add 5 to the previous calc
+Cub: 24
+
 Cub: ✅ Task Completed
 Summary:
-- React + Vite app created at workspace/todo
+- Full-stack chat app scaffold created
+- Seed data setup included
 ```
 
 ## Optional: OpenRouter for Fast Replies
