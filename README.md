@@ -48,6 +48,22 @@ Then open Telegram and send:
 - Work that needs tools/files/shell: queued task with progress + completion updates.
 - You can keep chatting while tasks run.
 
+## Example Conversation
+
+```text
+You: what is 8+7?
+Cub: 15
+
+You: create a todo app in workspace/todo using react+vite
+Cub: Queued task a1b2c3d4 (...). I will post progress updates and final result here.
+Cub: Task a1b2c3d4 in progress:
+- Creating project scaffold
+- Installing dependencies
+Cub: ✅ Task Completed
+Summary:
+- React + Vite app created at workspace/todo
+```
+
 ## Optional: OpenRouter for Fast Replies
 
 Keep Claude Code for delegated tasks, but use OpenRouter for fast-path chat replies:
