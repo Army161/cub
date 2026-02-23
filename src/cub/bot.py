@@ -99,24 +99,9 @@ class TelegramAssistantBot:
 
     def run(self) -> None:
         previous_handlers: dict[int, object] = {}
-        interrupt_count = 0
 
         def _handle_interrupt(sig: int, _frame) -> None:
-            nonlocal interrupt_count
-            interrupt_count += 1
-
-            if interrupt_count == 1:
-                logging.warning(
-                    "Interrupt received (signal %s). Stopping gracefully. Press Ctrl+C again to force exit.",
-                    sig,
-                )
-                try:
-                    self.app.stop_running()
-                except Exception:
-                    raise KeyboardInterrupt
-                return
-
-            logging.error("Forced exit requested via repeated interrupt (signal %s).", sig)
+            logging.error("Interrupt received (signal %s). Exiting immediately.", sig)
             os._exit(self.FORCE_EXIT_CODE)
 
         for sig in _iter_supported_signals():

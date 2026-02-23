@@ -146,8 +146,7 @@ uv run cub-killall --graceful
 
 Shutdown tip:
 
-- Press `Ctrl+C` once for graceful stop.
-- Press `Ctrl+C` again to force-exit immediately.
+- Press `Ctrl+C` to exit immediately.
 
 ## Important Config
 
