@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import re
 import signal
 import time
@@ -39,6 +40,7 @@ class TelegramAssistantBot:
 
     TYPING_INTERVAL_SECONDS = 4.0
     SHUTDOWN_TIMEOUT_SECONDS = 8.0
+    FORCE_EXIT_CODE = 130
 
     def __init__(self, settings: Settings, store: TaskStore):
         self.settings = settings
@@ -96,14 +98,46 @@ class TelegramAssistantBot:
         self.store.append_chat_message(chat_id, "assistant", text)
 
     def run(self) -> None:
-        stop_signals = [signal.SIGINT]
-        if hasattr(signal, "SIGTERM"):
-            stop_signals.append(signal.SIGTERM)
-        self.app.run_polling(
-            allowed_updates=["message"],
-            drop_pending_updates=self.settings.telegram_drop_pending_updates,
-            stop_signals=tuple(stop_signals),
-        )
+        previous_handlers: dict[int, object] = {}
+        interrupt_count = 0
+
+        def _handle_interrupt(sig: int, _frame) -> None:
+            nonlocal interrupt_count
+            interrupt_count += 1
+
+            if interrupt_count == 1:
+                logging.warning(
+                    "Interrupt received (signal %s). Stopping gracefully. Press Ctrl+C again to force exit.",
+                    sig,
+                )
+                try:
+                    self.app.stop_running()
+                except Exception:
+                    raise KeyboardInterrupt
+                return
+
+            logging.error("Forced exit requested via repeated interrupt (signal %s).", sig)
+            os._exit(self.FORCE_EXIT_CODE)
+
+        for sig in _iter_supported_signals():
+            try:
+                previous_handlers[sig] = signal.getsignal(sig)
+                signal.signal(sig, _handle_interrupt)
+            except (ValueError, OSError, RuntimeError):
+                continue
+
+        try:
+            self.app.run_polling(
+                allowed_updates=["message"],
+                drop_pending_updates=self.settings.telegram_drop_pending_updates,
+                stop_signals=(),
+            )
+        finally:
+            for sig, handler in previous_handlers.items():
+                try:
+                    signal.signal(sig, handler)
+                except (ValueError, OSError, RuntimeError):
+                    continue
 
     async def _post_init(self, app: Application) -> None:
         await app.bot.set_my_commands(
@@ -817,3 +851,10 @@ def _default_probe_prompt(task_id: str) -> str:
         f"Check on task {task_id} and provide a concise status update, "
         "what is already done, and the next step."
     )
+
+
+def _iter_supported_signals() -> tuple[int, ...]:
+    signals = [signal.SIGINT]
+    if hasattr(signal, "SIGTERM"):
+        signals.append(signal.SIGTERM)
+    return tuple(signals)

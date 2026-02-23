@@ -144,6 +144,11 @@ Graceful only (TERM, no force kill):
 uv run cub-killall --graceful
 ```
 
+Shutdown tip:
+
+- Press `Ctrl+C` once for graceful stop.
+- Press `Ctrl+C` again to force-exit immediately.
+
 ## Important Config
 
 - `TELEGRAM_MAX_CONCURRENT_UPDATES`: parallel inbound update handling (default `8`)
